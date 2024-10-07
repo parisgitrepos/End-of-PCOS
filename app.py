@@ -10,7 +10,7 @@ ENV_FILE = find_dotenv('.env')
 if ENV_FILE:
     load_dotenv(ENV_FILE)
 
-app = Flask(__name__, static_url_path='/assets', static_folder='assets/', template_folder='')
+app = Flask(__name__, static_url_path='/assets', static_folder='assets', template_folder='')
 app.secret_key = env.get("APP_SECRET_KEY")
 
 oauth = OAuth(app)
