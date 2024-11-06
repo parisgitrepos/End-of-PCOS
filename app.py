@@ -92,13 +92,15 @@ def register():
         return jsonify({'error': 'Email already registered'}), 409
 
     try:
+        # Create a new user, which will automatically hash the password in the constructor
         new_user = User(email=email, password=password)
         db.session.add(new_user)
         db.session.commit()
         return jsonify({'message': 'Registration successful', 'patient_id': new_user.id}), 201
-    except:
+    except Exception as e:
         db.session.rollback()
-        return jsonify({'error': 'Registration failed'}), 500
+        return jsonify({'error': 'Registration failed', 'details': str(e)}), 500
+
 
 @app.route('/api/login', methods=['POST'])
 def mobile_login():
