@@ -93,14 +93,14 @@ class Patient:
         else:
             return self.patient_details['last_name']
 
-    def get_recent_test_strip_photo(self):
-        if self.encrypted:
-            pass
-        else:
-            photo_mime = 'mime/jpg'
-            photo = self.client['Patients'][self.patient_id].find_one({'entry_type': 'test_strip_photo'})['photo']
-            photo = f'data:{photo_mime};base64,{photo}'
-            return photo
+    # def get_recent_test_strip_photo(self):
+    #     if self.encrypted:
+    #         pass
+    #     else:
+    #         photo_mime = 'mime/jpg'
+    #         photo = self.client['Patients'][self.patient_id].find_one({'entry_type': 'test_strip_photo'})['photo']
+    #         photo = f'data:{photo_mime};base64,{photo}'
+    #         return photo
 
     def _get_all_questions(self) -> dict:
         if not self.encrypted:
