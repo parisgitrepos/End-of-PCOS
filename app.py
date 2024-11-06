@@ -1,10 +1,148 @@
-from flask import Flask, redirect, render_template, session, url_for, request, send_from_directory, flash
-from os import environ as env
-from urllib.parse import quote_plus, urlencode
+from flask import Flask, request, jsonify, redirect, render_template, session, url_for, send_from_directory, flash
+from flask_sqlalchemy import SQLAlchemy
+from flask_bcrypt import Bcrypt
+from flask_cors import CORS
 from authlib.integrations.flask_client import OAuth
 from dotenv import find_dotenv, load_dotenv
+from os import environ as env
+from datetime import datetime
+import uuid
+import re
 from database import Patient, Provider
 from bokeh.resources import INLINE
+from urllib.parse import quote_plus, urlencode
+
+ENV_FILE = find_dotenv('.env')
+if ENV_FILE:
+    load_dotenv(ENV_FILE)
+
+app = Flask(__name__, static_url_path='/assets', static_folder='assets', template_folder='')
+app.secret_key = env.get("APP_SECRET_KEY")
+
+# Configure SQLAlchemy and other dependencies
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///endo.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+CORS(app)
+
+db = SQLAlchemy(app)
+bcrypt = Bcrypt(app)
+
+# OAuth configuration
+oauth = OAuth(app)
+oauth.register("auth0", client_id=env.get("AUTH0_CLIENT_ID"), client_secret=env.get("AUTH0_CLIENT_SECRET"),
+               client_kwargs={"scope": "openid profile email"},
+               server_metadata_url=f'https://{env.get("AUTH0_DOMAIN")}/.well-known/openid-configuration')
+
+# Models
+class User(db.Model):
+    id = db.Column(db.String(36), primary_key=True)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(60), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def __init__(self, email, password):
+        self.id = str(uuid.uuid4())
+        self.email = email
+        self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+
+
+class Survey(db.Model):
+    id = db.Column(db.String(36), primary_key=True)
+    user_id = db.Column(db.String(36), db.ForeignKey('user.id'), nullable=False)
+    is_on_period = db.Column(db.Boolean, nullable=False)
+    period_flow = db.Column(db.Integer, nullable=False)
+    change_frequency = db.Column(db.Integer, nullable=False)
+    has_spotting = db.Column(db.Boolean, nullable=False)
+    has_pain = db.Column(db.Boolean, nullable=False)
+    pain_level = db.Column(db.Integer, nullable=False)
+    sleep_quality = db.Column(db.Integer, nullable=False)
+    pain_qualities = db.Column(db.String, nullable=False)
+    pain_timing = db.Column(db.String, nullable=False)
+    pain_spread = db.Column(db.String, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+# Helper functions
+def validate_email(email):
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
+
+def validate_password(password):
+    return len(password) >= 8
+
+# API Routes
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    if not data or 'email' not in data or 'password' not in data:
+        return jsonify({'error': 'Email and password are required'}), 400
+
+    email = data['email'].lower()
+    password = data['password']
+
+    if not validate_email(email):
+        return jsonify({'error': 'Invalid email format'}), 400
+
+    if not validate_password(password):
+        return jsonify({'error': 'Password must be at least 8 characters long'}), 400
+
+    if User.query.filter_by(email=email).first():
+        return jsonify({'error': 'Email already registered'}), 409
+
+    try:
+        new_user = User(email=email, password=password)
+        db.session.add(new_user)
+        db.session.commit()
+        return jsonify({'message': 'Registration successful', 'patient_id': new_user.id}), 201
+    except:
+        db.session.rollback()
+        return jsonify({'error': 'Registration failed'}), 500
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    if not data or 'email' not in data or 'password' not in data:
+        return jsonify({'error': 'Email and password are required'}), 400
+
+    email = data['email'].lower()
+    password = data['password']
+    user = User.query.filter_by(email=email).first()
+
+    if user and bcrypt.check_password_hash(user.password_hash, password):
+        return jsonify({'message': 'Login successful', 'patient_id': user.id}), 200
+    else:
+        return jsonify({'error': 'Invalid email or password'}), 401
+
+@app.route('/api/survey', methods=['POST'])
+def submit_survey():
+    data = request.get_json()
+    user_id = data.get('user_id')
+
+    if not user_id:
+        return jsonify({'error': 'User ID is required'}), 400
+
+    new_survey = Survey(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        is_on_period=data.get('isOnPeriod', False),
+        period_flow=data.get('periodFlow', 0),
+        change_frequency=data.get('changeFrequency', 0),
+        has_spotting=data.get('hasSpotting', False),
+        has_pain=data.get('hasPain', False),
+        pain_level=data.get('painLevel', 0),
+        sleep_quality=data.get('sleepQuality', 0),
+        pain_qualities=','.join(data.get('painQualities', [])),
+        pain_timing=data.get('painTiming', ''),
+        pain_spread=data.get('painSpread', '')
+    )
+
+    try:
+        db.session.add(new_survey)
+        db.session.commit()
+        return jsonify({'message': 'Survey submitted successfully', 'survey_id': new_survey.id}), 201
+    except:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to submit survey'}), 500
+
 
 ENV_FILE = find_dotenv('.env')
 if ENV_FILE:
@@ -163,4 +301,6 @@ def no_page_found(e):
 
 
 if '__main__' == __name__:
+    with app.app_context():
+        db.create_all()
     app.run()
