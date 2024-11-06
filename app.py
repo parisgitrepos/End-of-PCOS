@@ -12,20 +12,23 @@ from database import Patient, Provider
 from bokeh.resources import INLINE
 from urllib.parse import quote_plus, urlencode
 
+# Load environment variables
 ENV_FILE = find_dotenv('.env')
 if ENV_FILE:
     load_dotenv(ENV_FILE)
 
+# Initialize Flask app
 app = Flask(__name__, static_url_path='/assets', static_folder='assets', template_folder='')
-app.secret_key = env.get("APP_SECRET_KEY")
 
-# Configure SQLAlchemy and other dependencies
+# Secret key and app configurations
+app.secret_key = env.get("APP_SECRET_KEY")
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///endo.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-CORS(app)
 
+# Initialize SQLAlchemy and other extensions
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
+CORS(app)
 
 # OAuth configuration
 oauth = OAuth(app)
@@ -98,7 +101,7 @@ def register():
         return jsonify({'error': 'Registration failed'}), 500
 
 @app.route('/api/login', methods=['POST'])
-def login():
+def mobile_login():
     data = request.get_json()
     if not data or 'email' not in data or 'password' not in data:
         return jsonify({'error': 'Email and password are required'}), 400
@@ -142,14 +145,6 @@ def submit_survey():
     except:
         db.session.rollback()
         return jsonify({'error': 'Failed to submit survey'}), 500
-
-
-ENV_FILE = find_dotenv('.env')
-if ENV_FILE:
-    load_dotenv(ENV_FILE)
-
-app = Flask(__name__, static_url_path='/assets', static_folder='assets', template_folder='')
-app.secret_key = env.get("APP_SECRET_KEY")
 
 oauth = OAuth(app)
 oauth.register("auth0", client_id=env.get("AUTH0_CLIENT_ID"), client_secret=env.get("AUTH0_CLIENT_SECRET"),
