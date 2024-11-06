@@ -193,14 +193,14 @@ def patient_dashboard(patient_id):
         patient_name = patient.get_first_name() + " " + patient.get_last_name()
         fsh_script, fsh_div = patient.get_chart('fsh')
         lh_script, lh_div = patient.get_chart('lh')
-        test_strip_photo = patient.get_recent_test_strip_photo()
+        #test_strip_photo = patient.get_recent_test_strip_photo()
         surveys = patient.get_surveys_overview()
         lh_range = patient.get_range('lh')
         fsh_range = patient.get_range('fsh')
         last_period = patient.get_last_period()
 
         return render_template('patient_dashboard.html', fsh_script=fsh_script, fsh_div=fsh_div,
-                               test_strip_photo_uri=test_strip_photo, js_resources=INLINE.render_js(),
+                               js_resources=INLINE.render_js(),
                                css_resources=INLINE.render_css(), user_name=user_name, patient_name=patient_name,
                                surveys=surveys, lh_div=lh_div, lh_script=lh_script, patient_id=patient_id,
                                lh_range=lh_range, fsh_range=fsh_range, last_period=last_period)
