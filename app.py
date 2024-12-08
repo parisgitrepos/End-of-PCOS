@@ -207,11 +207,14 @@ def patient_dashboard(patient_id):
 
 @app.route('/patients/<path:patient_id>/<path:date>')
 def patient_survey(patient_id, date):
-    print(date)
-    user_id = extract_user_id(session)
-    user_name = extract_user_name(session)
-    patient_key = Provider(user_id).get_patient_key(patient_id)
-    survey = Patient(patient_id, patient_key, encrypted=False).get_survey_by_date(date)
+    try:
+        print(date)
+        user_id = extract_user_id(session)
+        user_name = extract_user_name(session)
+        patient_key = Provider(user_id).get_patient_key(patient_id)
+        survey = Patient(patient_id, patient_key, encrypted=False).get_survey_by_date(date)
+    except Exception as error:
+        return str(error)
 
     return render_template('patient_survey.html', date=date, questions=survey, user_name=user_name)
 
