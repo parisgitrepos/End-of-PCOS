@@ -8,9 +8,11 @@ from os import environ as env
 from datetime import datetime
 import uuid
 import re
+from sqlalchemy import func
 from database import Patient, Provider
 from bokeh.resources import INLINE
 from urllib.parse import quote_plus, urlencode
+from datetime import datetime
 
 # Load environment variables
 ENV_FILE = find_dotenv('.env')
@@ -117,6 +119,54 @@ def mobile_login():
     else:
         return jsonify({'error': 'Invalid email or password'}), 401
 
+@app.route('/api/get_survey', methods=['POST'])
+def get_survey():
+    data = request.get_json()
+    user_id = data.get('user_id')
+    created_at = data.get('created_at')
+
+    if not user_id:
+        return jsonify({'error': 'User ID is required'}), 400
+
+    if not created_at:
+        return jsonify({'error': 'Created at timestamp is required'}), 400
+
+    try:
+        # Parse the created_at date from the request
+        try:
+            created_at_date = datetime.fromisoformat(created_at).date()  # Extract just the date
+        except ValueError as e:
+            return jsonify({'error': 'Invalid ISO 8601 date format', 'details': str(e)}), 400
+
+        # Query for the survey matching the user_id and created_at date
+        survey = Survey.query.filter(
+            Survey.user_id == user_id,
+            func.date(Survey.created_at) == created_at_date  # Compare just the date
+        ).first()
+
+        if not survey:
+            return jsonify({'error': 'Survey not found'}), 404
+
+        # Return the survey data as JSON
+        return jsonify({
+            'id': survey.id,
+            'user_id': survey.user_id,
+            'is_on_period': survey.is_on_period,
+            'period_flow': survey.period_flow,
+            'change_frequency': survey.change_frequency,
+            'has_spotting': survey.has_spotting,
+            'has_pain': survey.has_pain,
+            'pain_level': survey.pain_level,
+            'sleep_quality': survey.sleep_quality,
+            'pain_qualities': survey.pain_qualities.split(','),
+            'pain_timing': survey.pain_timing,
+            'pain_spread': survey.pain_spread,
+            'created_at': survey.created_at
+        }), 200
+    except Exception as e:
+        return jsonify({'error': f'Failed to retrieve survey: {str(e)}'}), 500
+
+    
 @app.route('/api/survey', methods=['POST'])
 def submit_survey():
     data = request.get_json()
@@ -125,6 +175,17 @@ def submit_survey():
     if not user_id:
         return jsonify({'error': 'User ID is required'}), 400
 
+    # Parse created_at from ISO 8601
+    created_at = data.get('createdAt')
+    if created_at:
+        try:
+            created_at = datetime.fromisoformat(created_at)  # Parse ISO 8601
+        except ValueError as e:
+            return jsonify({'error': 'Invalid ISO 8601 date format', 'details': str(e)}), 400
+    else:
+        created_at = datetime.utcnow()  # Default to now if not provided
+
+    # Create the new survey object
     new_survey = Survey(
         id=str(uuid.uuid4()),
         user_id=user_id,
@@ -137,16 +198,17 @@ def submit_survey():
         sleep_quality=data.get('sleepQuality', 0),
         pain_qualities=','.join(data.get('painQualities', [])),
         pain_timing=data.get('painTiming', ''),
-        pain_spread=data.get('painSpread', '')
+        pain_spread=data.get('painSpread', ''),
+        created_at=created_at  # Use the parsed/validated datetime object
     )
 
     try:
         db.session.add(new_survey)
         db.session.commit()
         return jsonify({'message': 'Survey submitted successfully', 'survey_id': new_survey.id}), 201
-    except:
+    except Exception as e:
         db.session.rollback()
-        return jsonify({'error': 'Failed to submit survey'}), 500
+        return jsonify({'error': f'Failed to submit survey: {str(e)}'}), 500
 
 oauth = OAuth(app)
 oauth.register("auth0", client_id=env.get("AUTH0_CLIENT_ID"), client_secret=env.get("AUTH0_CLIENT_SECRET"),
@@ -207,14 +269,11 @@ def patient_dashboard(patient_id):
 
 @app.route('/patients/<path:patient_id>/<path:date>')
 def patient_survey(patient_id, date):
-    try:
-        print(date)
-        user_id = extract_user_id(session)
-        user_name = extract_user_name(session)
-        patient_key = Provider(user_id).get_patient_key(patient_id)
-        survey = Patient(patient_id, patient_key, encrypted=False).get_survey_by_date(date)
-    except Exception as error:
-        return str(error)
+    print(date)
+    user_id = extract_user_id(session)
+    user_name = extract_user_name(session)
+    patient_key = Provider(user_id).get_patient_key(patient_id)
+    survey = Patient(patient_id, patient_key, encrypted=False).get_survey_by_date(date)
 
     return render_template('patient_survey.html', date=date, questions=survey, user_name=user_name)
 
