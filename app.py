@@ -160,8 +160,7 @@ def get_survey():
             'sleep_quality': survey.sleep_quality,
             'pain_qualities': survey.pain_qualities.split(','),
             'pain_timing': survey.pain_timing,
-            'pain_spread': survey.pain_spread,
-            'created_at': survey.created_at
+            'pain_spread': survey.pain_spread
         }), 200
     except Exception as e:
         return jsonify({'error': f'Failed to retrieve survey: {str(e)}'}), 500
@@ -183,6 +182,7 @@ def submit_survey():
         except ValueError as e:
             return jsonify({'error': 'Invalid ISO 8601 date format', 'details': str(e)}), 400
     else:
+        print("No created_at")
         created_at = datetime.utcnow()  # Default to now if not provided
 
     # Create the new survey object
@@ -199,7 +199,7 @@ def submit_survey():
         pain_qualities=','.join(data.get('painQualities', [])),
         pain_timing=data.get('painTiming', ''),
         pain_spread=data.get('painSpread', ''),
-        created_at=created_at  # Use the parsed/validated datetime object
+        created_at=created_at
     )
 
     try:
